@@ -315,6 +315,7 @@ TSWLatexianTemp*
 
 # Python
 chat_test.py
+Backup*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

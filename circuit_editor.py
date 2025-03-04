@@ -2,7 +2,8 @@
 TODO :
     * select componants (remove the selected componants)
     * modify wires
-    * add componants (resistor, capacitor, inductor, generator)
+    * add componant class to better organize the code
+    * add componants (capacitor, inductor, generator)
 """
 
 import pygame as pg
@@ -19,6 +20,7 @@ class Buttons:
         self.SIZE = np.array([TOOLBAR_WIDTH * self.WIDTH_RATIO, self.VERTICAL_SPACING*4])
         self.surf = pg.Surface(self.SIZE)
         self.rect = pg.Rect(((TOOLBAR_WIDTH-self.SIZE[0])/2, (self.VERTICAL_SPACING+self.SIZE[1])*position), self.SIZE)  # relative to the window
+        self.componant = Componant(type=type, color=BLACK, dest_surf=self.surf, start_pos=np.array([0.1*self.rect.width, self.rect.height/2]), end_pos=np.array([0.9*self.rect.width, self.rect.height/2]))
         self.update()
 
     
@@ -52,8 +54,7 @@ class Buttons:
         if self.type == "wire":
             draw_line_round_corners(self.surf, [0.1*self.rect.width, self.rect.height/2], [0.9*self.rect.width, self.rect.height/2], BLACK, WIRE_WIDTH)
         elif self.type == "resistor":
-            pos1, pos2 = np.array([0.1*self.rect.width, self.rect.height/2]), np.array([0.9*self.rect.width, self.rect.height/2])
-            draw_resistor(self.surf, pos1, pos2, BLACK)
+            self.componant.draw()
         # draw button onto the toolbar
         toolbar.blit(self.surf, self.rect)
         # draw borders if selected
@@ -61,27 +62,57 @@ class Buttons:
             pg.draw.rect(toolbar, DARK_BLUE, self.rect, WIRE_WIDTH)
         
 
+class Componant:
+    def __init__(self, start_pos=[0,0], end_pos=[0,0], type="wire", label_option="", dest_surf=None, color=None):
+        """
+        surf option: where to blit the componant (also used to know if it should be included in tikz code)
+        """
+        self.dest_surf = dest_surf
+        self.color = color
+        self.type = type
+        self.start = start_pos
+        self.end = end_pos
+        self.label_option = label_option  # "_ - * $" bottom/left ; middle ; top/right ; math mode ; 
+        self.tikz_type = "short" if type=="wire" else "R"
 
-def draw_resistor(surf, pos1, pos2, color):
-    """
-    blit a resistor onto the surface parameter
-    """
-    dx = pos2[0] - pos1[0]
-    dy = pos2[1] - pos1[1]
-    # Use np.arctan2 to properly compute the angle
-    alpha = np.arctan2(dy, dx)
+    def draw(self):
+        if self.type == "wire":
+            self.draw_wire()
+        elif self.type == "resistor":
+            self.draw_resistor()
 
-    l = (np.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) - RESISTOR_WIDTH) / 2
-    R_left, R_right = [pos1[0]+l*np.cos(alpha), pos1[1]+l*np.sin(alpha)], [pos1[0]+(l+RESISTOR_WIDTH)*np.cos(alpha), pos1[1]+(l+RESISTOR_WIDTH)*np.sin(alpha)]
-    # branches
-    draw_line_round_corners(surf, pos1, R_left, color, width=WIRE_WIDTH)
-    draw_line_round_corners(surf, R_right, pos2, color, width=WIRE_WIDTH)
-    # rectangle ABCD
-    A = [R_left[0]-(RESISTOR_HEIGHT/2)*np.sin(alpha), R_left[1]+(RESISTOR_HEIGHT/2)*np.cos(alpha)]
-    B = [R_left[0]+(RESISTOR_HEIGHT/2)*np.sin(alpha), R_left[1]-(RESISTOR_HEIGHT/2)*np.cos(alpha)]
-    C = [R_right[0]+(RESISTOR_HEIGHT/2)*np.sin(alpha), R_right[1]-(RESISTOR_HEIGHT/2)*np.cos(alpha)]
-    D = [R_right[0]-(RESISTOR_HEIGHT/2)*np.sin(alpha), R_right[1]+(RESISTOR_HEIGHT/2)*np.cos(alpha)]
-    pg.draw.polygon(surf, color, [A,B,C,D], width=WIRE_WIDTH)
+    def draw_wire(self):
+        """draw wire onto the display"""
+        draw_line_round_corners(self.dest_surf, self.start-np.array([TOOLBAR_WIDTH, 0]), self.end-np.array([TOOLBAR_WIDTH, 0]), self.color, WIRE_WIDTH)
+
+    def draw_resistor(self):
+        """
+        blit a resistor onto the surface parameter
+        """
+        if self.dest_surf == display:
+            pos1 = self.start-np.array([TOOLBAR_WIDTH, 0])
+            pos2 = self.end-np.array([TOOLBAR_WIDTH, 0])
+        else:
+            pos1 = self.start
+            pos2 = self.end
+
+        dx = pos2[0] - pos1[0]
+        dy = pos2[1] - pos1[1]
+        # Use np.arctan2 to properly compute the angle
+        alpha = np.arctan2(dy, dx)
+        # l is the lenght of branches
+        l = (np.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) - RESISTOR_WIDTH) / 2
+        R_left, R_right = [pos1[0]+l*np.cos(alpha), self.start[1]+l*np.sin(alpha)], [pos1[0]+(l+RESISTOR_WIDTH)*np.cos(alpha), pos1[1]+(l+RESISTOR_WIDTH)*np.sin(alpha)]
+        # branches
+        draw_line_round_corners(self.dest_surf, pos1, R_left, self.color, width=WIRE_WIDTH)
+        draw_line_round_corners(self.dest_surf, R_right, pos2, self.color, width=WIRE_WIDTH)
+        # rectangle ABCD
+        A = [R_left[0]-(RESISTOR_HEIGHT/2)*np.sin(alpha), R_left[1]+(RESISTOR_HEIGHT/2)*np.cos(alpha)]
+        B = [R_left[0]+(RESISTOR_HEIGHT/2)*np.sin(alpha), R_left[1]-(RESISTOR_HEIGHT/2)*np.cos(alpha)]
+        C = [R_right[0]+(RESISTOR_HEIGHT/2)*np.sin(alpha), R_right[1]-(RESISTOR_HEIGHT/2)*np.cos(alpha)]
+        D = [R_right[0]-(RESISTOR_HEIGHT/2)*np.sin(alpha), R_right[1]+(RESISTOR_HEIGHT/2)*np.cos(alpha)]
+        pg.draw.polygon(self.dest_surf, self.color, [A,B,C,D], width=WIRE_WIDTH)
+
 
 
 def draw_grid():
@@ -92,18 +123,6 @@ def draw_grid():
         pg.draw.line(display, DARK_GRAY, (x, 0), (x, display.get_height()), 1)
     for y in range(CELL_SIZE, CELL_SIZE*(GRID_SIZE[1]+1), CELL_SIZE):  # horizontal lines
         pg.draw.line(display, DARK_GRAY, (0, y), (display.get_width(), y), 1)
-
-
-def draw_wires():
-    """draw wires onto the display"""
-    for wire in wires:
-        draw_line_round_corners(display, wire[0]-np.array([TOOLBAR_WIDTH, 0]), wire[1]-np.array([TOOLBAR_WIDTH, 0]), BLUE, WIRE_WIDTH)
-
-
-def draw_resistors():
-    """draw resistors onto the display"""
-    for resistor in resistors:
-        draw_resistor(display, resistor[0]-np.array([TOOLBAR_WIDTH, 0]), resistor[1]-np.array([TOOLBAR_WIDTH, 0]), BLUE)
 
 
 def snap_to_grid(coord):
@@ -125,25 +144,23 @@ def generate_tikz_code():
     TIKZ_SCALE_FACTOR = 2
     # find the coordinate of the componant at the top left (used to simplify tikz code)
     offset = np.array(screen.get_size())
-    for componant in (wires+resistors):
-        offset[0] = min(offset[0], min(componant[0][0], componant[1][0])) 
-        offset[1] = min(offset[1], min(componant[0][1], componant[1][1]))
+    for componant in componants:
+        offset[0] = min(offset[0], min(componant.start[0], componant.end[0])) 
+        offset[1] = min(offset[1], min(componant.start[1], componant.end[1]))
     offset[0] = offset[0] - TOOLBAR_WIDTH
     offset = offset // CELL_SIZE  # convert to tikz coordinate
 
     # code
-    tikz_code = "\\begin{tikzpicture}\n"
-    
-    for wire in wires:
-        start = (wire[0] - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset
-        end = (wire[1] - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset
-        tikz_code += f"    \\draw ({start[0]*TIKZ_SCALE_FACTOR:.1f}, {-start[1]*TIKZ_SCALE_FACTOR:.1f}) -- ({end[0]*TIKZ_SCALE_FACTOR:.1f}, {-end[1]*TIKZ_SCALE_FACTOR:.1f});\n"
-    for resistor in resistors:
-        start = (resistor[0] - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset
-        end = (resistor[1] - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset
-        tikz_code += f"    \\draw ({start[0]*TIKZ_SCALE_FACTOR:.1f}, {-start[1]*TIKZ_SCALE_FACTOR:.1f}) to[R] ({end[0]*TIKZ_SCALE_FACTOR:.1f}, {-end[1]*TIKZ_SCALE_FACTOR:.1f});\n"
-    
-    tikz_code += "\\end{tikzpicture}"
+    tikz_code = "\\documentclass[tikz,border=10pt]{standalone}\n\n"
+    tikz_code += "\\usepackage[european, straightvoltages, RPvoltages, cute inductor]{circuitikz}  % RPvoltages definie la convention des dipoles (sens tension faux sinon)\n\n"
+    tikz_code += "\\begin{document}\n\n    \\begin{tikzpicture}\n"
+    for componant in componants:
+        start = ((componant.start - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
+        end = ((componant.end - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
+        label = ", l=R" if componant.type=="resistor" else ""
+        tikz_code += f"        \\draw ({start[0]:.1f}, {-start[1]:.1f}) to[{componant.tikz_type}{label}] ({end[0]:.1f}, {-end[1]:.1f});\n"
+
+    tikz_code += "    \\end{tikzpicture}\n\n\\end{document}"
     print(tikz_code)
     tikz_code = font.render(tikz_code, True, BLACK)
     return tikz_code
@@ -193,13 +210,12 @@ console.fill(LIGHT_GRAY)
 
 
 # componants
+componants = []  # list of object (class: Componant)
 componant_selected = None  # str (ex: "wire" or "inductor")
 # wires
 creating_componant = False
 WIRE_WIDTH = 5
-wires = []  # list of tuple(start pos[np array], end pos[np array])
 # resistors
-resistors = []  # list of tuple(start pos[np array], end pos[np array])
 RESISTOR_WIDTH_RATIO = 0.75
 RESISTOR_WIDTH = RESISTOR_WIDTH_RATIO * CELL_SIZE
 RESISTOR_HEIGHT_RATIO = 2/5
@@ -209,7 +225,6 @@ RESISTOR_HEIGHT = RESISTOR_WIDTH * RESISTOR_HEIGHT_RATIO
 buttons = []  # list of objects from class Buttons
 for i, name in enumerate(["wire", "resistor", "capacitor", "inductor", "generator"]):
     buttons.append(Buttons(name, i+1))
-
 
 
 # main loop
@@ -242,26 +257,17 @@ while running:
         # left click --> create a componant
         if pg.mouse.get_just_pressed()[0] and display_rect.collidepoint(mouse_pos):
             start_pos = snap_to_grid(mouse_pos)
-            if componant_selected == "wire":
-                wires.append(np.array([start_pos, mouse_pos]))
-            elif componant_selected == "resistor":
-                resistors.append([start_pos, mouse_pos])
+            componants.append(Componant(start_pos=start_pos, end_pos=mouse_pos, type=componant_selected, dest_surf=display, color=BLUE))
             creating_componant = True
         elif creating_componant:  # update the componant pos that is currently created
-            if componant_selected == "wire":
-                wires[-1][1] = snap_to_grid(mouse_pos)
-            elif componant_selected == "resistor":
-                resistors[-1][1] = snap_to_grid(mouse_pos)
+            componants[-1].end = snap_to_grid(mouse_pos)
 
         # release left click --> remove componant if not valid
         if pg.mouse.get_just_released()[0]:
             # check if componant inside display and is long enough
             if creating_componant and (not display_rect.collidepoint(mouse_pos) or np.linalg.norm((start_pos-mouse_pos)) < CELL_SIZE/2):
                 print("not long enough or outside display")
-                if componant_selected == "wire":
-                    wires.pop(-1)  # remove the componant that was being created
-                elif componant_selected == "resistor":
-                    wires.pop(-1)  # remove the componant that was being created
+                componants.pop(-1)  # remove the componant that was being created
             else:
                 code = generate_tikz_code()
                 console.fill(LIGHT_GRAY)
@@ -274,9 +280,9 @@ while running:
 
     draw_grid()
     
-    draw_wires()
-
-    draw_resistors()
+    # draw componants
+    for componant in componants:
+        componant.draw()
 
 
     # blit surfaces onto the screen
