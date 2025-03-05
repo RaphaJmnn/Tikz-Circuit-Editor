@@ -2,8 +2,8 @@
 TODO :
     * select componants (remove the selected componants)
     * modify wires
-    * add componant class to better organize the code
-    * add componants (capacitor, inductor, generator)
+    * Add options for componants (different types of generators, label options ...)
+    * Add componants (diode, transistor)
 """
 
 import pygame as pg
@@ -51,10 +51,7 @@ class Buttons:
         # draw button background
         self.surf.fill(RED)
         # draw button symbol (TODO)
-        if self.type == "wire":
-            draw_line_round_corners(self.surf, [0.1*self.rect.width, self.rect.height/2], [0.9*self.rect.width, self.rect.height/2], BLACK, WIRE_WIDTH)
-        elif self.type == "resistor":
-            self.componant.draw()
+        self.componant.draw()
         # draw button onto the toolbar
         toolbar.blit(self.surf, self.rect)
         # draw borders if selected
@@ -73,21 +70,48 @@ class Componant:
         self.start = start_pos
         self.end = end_pos
         self.label_option = label_option  # "_ - * $" bottom/left ; middle ; top/right ; math mode ; 
-        self.tikz_type = "short" if type=="wire" else "R"
+
+        if self.type == "wire":
+            self.tikz_type = "short"
+        elif type=="resistor":
+            self.tikz_type = "R"
+        elif type=="inductor":
+            self.tikz_type = "L"
+        elif type=="capacitor":
+            self.tikz_type = "C"
+        elif type=="generator":
+            self.tikz_type = "voltage source"
+        else:
+            self.tikz_type = ""
+
 
     def draw(self):
         if self.type == "wire":
             self.draw_wire()
         elif self.type == "resistor":
             self.draw_resistor()
+        elif self.type == "inductor":
+            self.draw_inductor()
+        elif self.type == "capacitor":
+            self.draw_capacitor()
+        elif self.type == "generator":
+            self.draw_generator()
+
 
     def draw_wire(self):
         """draw wire onto the display"""
-        draw_line_round_corners(self.dest_surf, self.start-np.array([TOOLBAR_WIDTH, 0]), self.end-np.array([TOOLBAR_WIDTH, 0]), self.color, WIRE_WIDTH)
+        if self.dest_surf == display:
+            start = self.start-np.array([TOOLBAR_WIDTH, 0])
+            end = self.end-np.array([TOOLBAR_WIDTH, 0])
+        else:
+            start, end = self.start, self.end
+
+        draw_line_round_corners(self.dest_surf, start, end, self.color, WIRE_WIDTH)
+
 
     def draw_resistor(self):
         """
-        blit a resistor onto the surface parameter
+        blit a resistor onto self.dest_surf
         """
         if self.dest_surf == display:
             pos1 = self.start-np.array([TOOLBAR_WIDTH, 0])
@@ -114,6 +138,102 @@ class Componant:
         pg.draw.polygon(self.dest_surf, self.color, [A,B,C,D], width=WIRE_WIDTH)
 
 
+    def draw_inductor(self):
+        """
+        blit an inductor onto self.dest_surf
+        """
+        if self.dest_surf == display:
+            pos1 = self.start-np.array([TOOLBAR_WIDTH, 0])
+            pos2 = self.end-np.array([TOOLBAR_WIDTH, 0])
+        else:
+            pos1 = self.start
+            pos2 = self.end
+
+        dx, dy = pos2[0] - pos1[0], pos2[1] - pos1[1]
+        # Use np.arctan2 to properly compute the angle
+        alpha = np.arctan2(dy, dx)
+        # l is the lenght of branches
+        l = (np.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) - RESISTOR_WIDTH) / 2
+        R_left= [pos1[0]+l*np.cos(alpha), self.start[1]+l*np.sin(alpha)]
+        R_right =  [pos1[0]+(l+RESISTOR_WIDTH)*np.cos(alpha), pos1[1]+(l+RESISTOR_WIDTH)*np.sin(alpha)]
+        # branches
+        draw_line_round_corners(self.dest_surf, pos1, R_left, self.color, width=WIRE_WIDTH)
+        draw_line_round_corners(self.dest_surf, R_right, pos2, self.color, width=WIRE_WIDTH)
+        # Centres des cercles pour les arcs
+        arc_centers = []
+        for i in range(3):
+            offset = (i + 0.5) * (RESISTOR_WIDTH / 3)  # Position de chaque arc
+            center = np.array([
+                R_left[0] + offset * np.cos(alpha) + (RESISTOR_HEIGHT / 2) * np.sin(alpha),
+                R_left[1] + offset * np.sin(alpha) - (RESISTOR_HEIGHT / 2) * np.cos(alpha)
+            ])
+            arc_centers.append(center)
+
+        # Dessiner les arcs avec correction de l'alignement
+        for center in arc_centers:
+            rect = pg.Rect(0, 0, RESISTOR_HEIGHT, RESISTOR_HEIGHT)
+            rect.center = (center[0] - (RESISTOR_HEIGHT/2)*np.sin(alpha),
+                        center[1] + (RESISTOR_HEIGHT/2)*np.cos(alpha))  # Ajustement ici
+            pg.draw.arc(self.dest_surf, self.color, rect, -alpha, -alpha+np.pi, WIRE_WIDTH)
+
+
+    def draw_capacitor(self):
+        """
+        blit an capacitor onto self.dest_surf
+        """
+        if self.dest_surf == display:
+            pos1 = self.start-np.array([TOOLBAR_WIDTH, 0])
+            pos2 = self.end-np.array([TOOLBAR_WIDTH, 0])
+        else:
+            pos1 = self.start
+            pos2 = self.end
+
+        dx = pos2[0] - pos1[0]
+        dy = pos2[1] - pos1[1]
+        # Use np.arctan2 to properly compute the angle
+        alpha = np.arctan2(dy, dx)
+        # l is the lenght of branches
+        l = (np.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) - CAPACITOR_WIDTH) / 2
+        R_left, R_right = [pos1[0]+l*np.cos(alpha), self.start[1]+l*np.sin(alpha)], [pos1[0]+(l+CAPACITOR_WIDTH)*np.cos(alpha), pos1[1]+(l+CAPACITOR_WIDTH)*np.sin(alpha)]
+        # branches
+        draw_line_round_corners(self.dest_surf, pos1, R_left, self.color, width=WIRE_WIDTH)
+        draw_line_round_corners(self.dest_surf, R_right, pos2, self.color, width=WIRE_WIDTH)
+        # rectangle ABCD
+        A = [R_left[0]-(CAPACITOR_HEIGH/2)*np.sin(alpha), R_left[1]+(CAPACITOR_HEIGH/2)*np.cos(alpha)]
+        B = [R_left[0]+(CAPACITOR_HEIGH/2)*np.sin(alpha), R_left[1]-(CAPACITOR_HEIGH/2)*np.cos(alpha)]
+        C = [R_right[0]+(CAPACITOR_HEIGH/2)*np.sin(alpha), R_right[1]-(CAPACITOR_HEIGH/2)*np.cos(alpha)]
+        D = [R_right[0]-(CAPACITOR_HEIGH/2)*np.sin(alpha), R_right[1]+(CAPACITOR_HEIGH/2)*np.cos(alpha)]
+        # draw two lines
+        draw_line_round_corners(self.dest_surf, A, B, self.color, width=WIRE_WIDTH)
+        draw_line_round_corners(self.dest_surf, C, D, self.color, width=WIRE_WIDTH)
+
+
+    def draw_generator(self):
+        """
+        blit a generator onto self.dest_surf
+        """
+        if self.dest_surf == display:
+            pos1 = self.start-np.array([TOOLBAR_WIDTH, 0])
+            pos2 = self.end-np.array([TOOLBAR_WIDTH, 0])
+        else:
+            pos1 = self.start
+            pos2 = self.end
+
+        dx = pos2[0] - pos1[0]
+        dy = pos2[1] - pos1[1]
+        # Use np.arctan2 to properly compute the angle
+        alpha = np.arctan2(dy, dx)
+        # l is the lenght of branches
+        l = (np.sqrt((pos2[0]-pos1[0])**2 + (pos2[1]-pos1[1])**2) - RESISTOR_WIDTH) / 2
+        # branches
+        R_left= np.array([pos1[0]+l*np.cos(alpha), self.start[1]+l*np.sin(alpha)])
+        R_right =  np.array([pos1[0]+(l+RESISTOR_WIDTH)*np.cos(alpha), pos1[1]+(l+RESISTOR_WIDTH)*np.sin(alpha)])  
+        draw_line_round_corners(self.dest_surf, pos1, R_left, self.color, width=WIRE_WIDTH)
+        draw_line_round_corners(self.dest_surf, R_right, pos2, self.color, width=WIRE_WIDTH)
+        # circle
+        radius = np.linalg.norm(R_right-R_left)/2
+        pg.draw.circle(self.dest_surf, self.color, (R_right+R_left)/2, radius, WIRE_WIDTH)
+
 
 def draw_grid():
     """
@@ -133,8 +253,8 @@ def snap_to_grid(coord):
 
 def draw_line_round_corners(surf, start_pos, end_pos, color, width):
     pg.draw.line(surf, color, start_pos, end_pos, width)
-    pg.draw.circle(surf, color, start_pos, width)  # add // 2 to get a simple rounded edge 
-    pg.draw.circle(surf, color, end_pos, width)  # add // 2 to get a simple rounded edge 
+    pg.draw.circle(surf, color, start_pos, width//2)  # add // 2 to get a simple rounded edge 
+    pg.draw.circle(surf, color, end_pos, width//2)  # add // 2 to get a simple rounded edge 
 
 
 def generate_tikz_code():
@@ -157,7 +277,7 @@ def generate_tikz_code():
     for componant in componants:
         start = ((componant.start - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
         end = ((componant.end - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
-        label = ", l=R" if componant.type=="resistor" else ""
+        label = ""if componant.type=="wire" else f", l={componant.tikz_type}"
         tikz_code += f"        \\draw ({start[0]:.1f}, {-start[1]:.1f}) to[{componant.tikz_type}{label}] ({end[0]:.1f}, {-end[1]:.1f});\n"
 
     tikz_code += "    \\end{tikzpicture}\n\n\\end{document}"
@@ -210,16 +330,21 @@ console.fill(LIGHT_GRAY)
 
 
 # componants
+creating_componant = False
 componants = []  # list of object (class: Componant)
 componant_selected = None  # str (ex: "wire" or "inductor")
 # wires
-creating_componant = False
 WIRE_WIDTH = 5
-# resistors
+# resistors dimensions
 RESISTOR_WIDTH_RATIO = 0.75
 RESISTOR_WIDTH = RESISTOR_WIDTH_RATIO * CELL_SIZE
 RESISTOR_HEIGHT_RATIO = 2/5
 RESISTOR_HEIGHT = RESISTOR_WIDTH * RESISTOR_HEIGHT_RATIO
+# capacitors dimensions
+CAPACITOR_WIDTH_RATIO = 1/3
+CAPACITOR_WIDTH = CAPACITOR_WIDTH_RATIO * CELL_SIZE
+CAPACITOR_HEIGHT_RATIO = 4/3
+CAPACITOR_HEIGH = CAPACITOR_WIDTH * CAPACITOR_HEIGHT_RATIO
 
 # boutons
 buttons = []  # list of objects from class Buttons
