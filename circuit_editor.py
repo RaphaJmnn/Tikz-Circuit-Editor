@@ -1,26 +1,28 @@
 """"
 TODO :
-    * select componants (remove the selected componants)
+    * select components (remove the selected components)
     * modify wires
-    * Add options for componants (different types of generators, label options ...)
-    * Add componants (diode, transistor)
+    * Add options for components (different types of generators, label options ...)
+    * Add components (diode, transistor)
 """
 
 import pygame as pg
 from pygame.locals import *
+import pygame_gui
 import numpy as np
 
 
 class Buttons:
     def __init__(self, type="wire", position=1):
+        self.position = position
         self.type = type
         self.selected = False
         self.VERTICAL_SPACING = 20
         self.WIDTH_RATIO = 0.8
         self.SIZE = np.array([TOOLBAR_WIDTH * self.WIDTH_RATIO, self.VERTICAL_SPACING*4])
         self.surf = pg.Surface(self.SIZE)
-        self.rect = pg.Rect(((TOOLBAR_WIDTH-self.SIZE[0])/2, (self.VERTICAL_SPACING+self.SIZE[1])*position), self.SIZE)  # relative to the window
-        self.componant = Componant(type=type, color=BLACK, dest_surf=self.surf, start_pos=np.array([0.1*self.rect.width, self.rect.height/2]), end_pos=np.array([0.9*self.rect.width, self.rect.height/2]))
+        self.rect = pg.Rect(((TOOLBAR_WIDTH-self.SIZE[0])/2, (self.VERTICAL_SPACING+self.SIZE[1])*self.position), self.SIZE) 
+        self.component = Component(type=type, color=BLACK, dest_surf=self.surf, start_pos=np.array([0.1*self.rect.width, self.rect.height/2]), end_pos=np.array([0.9*self.rect.width, self.rect.height/2]))
         self.update()
 
     
@@ -28,12 +30,12 @@ class Buttons:
         """
         This function is called every time the user clicks.
         It updates the buttons state (selected or not) --> update visual (calls update function)
-        return the type of componant selected (or None if no componant is selected)
+        return the type of component selected (or None if no component is selected)
         """
         
-        self.selected = not self.selected  # select/deselect componant clicked
+        self.selected = not self.selected  # select/deselect component clicked
 
-        # deselect every componant when another is clicked
+        # deselect every component when another is clicked
         for button in buttons:
             if self != button:
                 button.selected = False
@@ -47,11 +49,21 @@ class Buttons:
             return self.type
         return None
 
+
+    def update_size(self):
+        self.SIZE = np.array([TOOLBAR_WIDTH * self.WIDTH_RATIO, self.VERTICAL_SPACING*4])
+        self.surf = pg.Surface(self.SIZE)
+        self.rect = pg.Rect(((TOOLBAR_WIDTH-self.SIZE[0])/2, (self.VERTICAL_SPACING+self.SIZE[1])*self.position), self.SIZE) 
+        self.component.start_pos = np.array([0.1*self.rect.width, self.rect.height/2])
+        self.component.end_pos = np.array([0.9*self.rect.width, self.rect.height/2])
+        self.component.dest_surf = self.surf
+
+
     def update(self):
         # draw button background
         self.surf.fill(RED)
         # draw button symbol (TODO)
-        self.componant.draw()
+        self.component.draw()
         # draw button onto the toolbar
         toolbar.blit(self.surf, self.rect)
         # draw borders if selected
@@ -59,10 +71,10 @@ class Buttons:
             pg.draw.rect(toolbar, DARK_BLUE, self.rect, WIRE_WIDTH)
         
 
-class Componant:
+class Component:
     def __init__(self, start_pos=[0,0], end_pos=[0,0], type="wire", label_option="", dest_surf=None, color=None):
         """
-        surf option: where to blit the componant (also used to know if it should be included in tikz code)
+        surf option: where to blit the component (also used to know if it should be included in tikz code)
         """
         self.dest_surf = dest_surf
         self.color = color
@@ -257,33 +269,51 @@ def draw_line_round_corners(surf, start_pos, end_pos, color, width):
     pg.draw.circle(surf, color, end_pos, width//2)  # add // 2 to get a simple rounded edge 
 
 
-def generate_tikz_code():
+def display_tikz_code():
     """
-    Génère le code TikZ pour les fils dessinés.
+    Génère et Affiche le code Tikz.
     """
+    global text_box, tikz_code
+
     TIKZ_SCALE_FACTOR = 2
-    # find the coordinate of the componant at the top left (used to simplify tikz code)
+    # find the coordinate of the component at the top left (used to simplify tikz code)
     offset = np.array(screen.get_size())
-    for componant in componants:
-        offset[0] = min(offset[0], min(componant.start[0], componant.end[0])) 
-        offset[1] = min(offset[1], min(componant.start[1], componant.end[1]))
+    for component in components:
+        offset[0] = min(offset[0], min(component.start[0], component.end[0])) 
+        offset[1] = min(offset[1], min(component.start[1], component.end[1]))
     offset[0] = offset[0] - TOOLBAR_WIDTH
     offset = offset // CELL_SIZE  # convert to tikz coordinate
 
     # code
     tikz_code = "\\documentclass[tikz,border=10pt]{standalone}\n\n"
-    tikz_code += "\\usepackage[european, straightvoltages, RPvoltages, cute inductor]{circuitikz}  % RPvoltages definie la convention des dipoles (sens tension faux sinon)\n\n"
+    tikz_code += "\\usepackage[european, straightvoltages, RPvoltages, cute inductor]{circuitikz}\n\n"
     tikz_code += "\\begin{document}\n\n    \\begin{tikzpicture}\n"
-    for componant in componants:
-        start = ((componant.start - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
-        end = ((componant.end - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
-        label = ""if componant.type=="wire" else f", l={componant.tikz_type}"
-        tikz_code += f"        \\draw ({start[0]:.1f}, {-start[1]:.1f}) to[{componant.tikz_type}{label}] ({end[0]:.1f}, {-end[1]:.1f});\n"
-
+    print(len(components))
+    for component in components:
+        start = ((component.start - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
+        end = ((component.end - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
+        label = ""if component.type=="wire" else f", l={component.tikz_type}"
+        tikz_code += f"        \\draw ({start[0]:.1f}, {-start[1]:.1f}) to[{component.tikz_type}{label}] ({end[0]:.1f}, {-end[1]:.1f});\n"
     tikz_code += "    \\end{tikzpicture}\n\n\\end{document}"
-    print(tikz_code)
-    tikz_code = font.render(tikz_code, True, BLACK)
-    return tikz_code
+
+    text_box.set_text(tikz_code)
+
+
+def valid_placement():
+    """
+    Test if the component placed (when mouse released) is not too short
+    not outside display and not overlapping with another component.
+    return True or False
+    """    
+    for component in components[:-1]:  # iterate trought all elements exept the last one
+        if (np.array_equal(components[-1].start, component.start) and np.array_equal(components[-1].end, component.end)) or \
+            (np.array_equal(components[-1].start, component.end) and np.array_equal(components[-1].end, component.start)):
+            return False
+        
+    if not display_rect.collidepoint(mouse_pos) or np.linalg.norm((start_pos-mouse_pos)) < CELL_SIZE/2:
+        return False
+    
+    return True
 
 
 # constants
@@ -306,7 +336,9 @@ clock = pg.time.Clock()
 font = pg.font.Font(pg.font.match_font("courier"), 16)  # Use "Courier New" or a similar font
 
 # screen options
+FPS = 25
 screen = pg.display.set_mode((1080, 720), RESIZABLE, 32)
+pg.display.set_caption("Circuit Latex Editor")
 
 # toolbar
 TOOLBAR_WIDTH_RATIO = 0.2  # 20% of the screen width
@@ -319,20 +351,20 @@ height_ratio = 0.6
 display = pg.Surface((screen.get_width() - TOOLBAR_WIDTH, int(screen.get_height()*height_ratio)))
 display_rect = pg.Rect((TOOLBAR_WIDTH, 0), display.get_size())
 
+# Create a UIManager
+UI_manager = pygame_gui.UIManager((1080, 720))
+tikz_code = ""
+text_box = pygame_gui.elements.UITextBox(tikz_code, pg.Rect(TOOLBAR_WIDTH, display.height, display.width, screen.height-display.height), UI_manager)
+
 # grid inside display
 CELL_SIZE = 80
 GRID_SIZE = (display.get_width() // CELL_SIZE, display.get_height() // CELL_SIZE)  # number of cells
 
-# console is the surface where the tikz code is written
-console = pg.Surface((screen.get_width() - TOOLBAR_WIDTH, int(screen.get_height()*(1-0.6))))
-pg.display.set_caption("Circuit Latex Editor")
-console.fill(LIGHT_GRAY)
-
-
-# componants
-creating_componant = False
-componants = []  # list of object (class: Componant)
-componant_selected = None  # str (ex: "wire" or "inductor")
+# components
+creating_component = False
+components = []  # list of object (class: component)
+component_selected = None  # str (ex: "wire" or "inductor")
+SELECT_RADIUS = 10  # px
 # wires
 WIRE_WIDTH = 5
 # resistors dimensions
@@ -349,12 +381,15 @@ CAPACITOR_HEIGH = CAPACITOR_WIDTH * CAPACITOR_HEIGHT_RATIO
 # boutons
 buttons = []  # list of objects from class Buttons
 for i, name in enumerate(["wire", "resistor", "capacitor", "inductor", "generator"]):
-    buttons.append(Buttons(name, i+1))
+    buttons.append(Buttons(name, i+1))  # i is for the position of the buttons
 
 
 # main loop
 running = True
 while running:
+    # FPS
+    time_delta = clock.tick(FPS) / 1000.0
+
     for event in pg.event.get():
         if event.type == QUIT:
             running = False
@@ -362,62 +397,93 @@ while running:
             if event.key == K_ESCAPE:
                 running = False
         if event.type == WINDOWRESIZED:  # update surfaces
+            # toolbar
             TOOLBAR_WIDTH = TOOLBAR_WIDTH_RATIO * screen.get_width() 
             toolbar = pg.Surface((TOOLBAR_WIDTH, screen.get_height()))
+            toolbar.fill(GRAY)
+            for button in buttons:
+                button.update_size()
+                button.update()
+            # display
             display = pg.Surface((screen.get_width() - TOOLBAR_WIDTH, int(screen.get_height()*height_ratio)))
             display_rect = pg.Rect((TOOLBAR_WIDTH, 0), display.get_size())
-            console = pg.Surface((screen.get_width() - TOOLBAR_WIDTH, int(screen.get_height()*(1-0.6))))
             GRID_SIZE = (display.get_width() // CELL_SIZE, display.get_height() // CELL_SIZE)  # number of cells
-        if event.type == MOUSEMOTION:
+            # Redraw the components on the new display surface (size changed)
+            for component in components:
+                component.dest_surf = display
+                component.start = snap_to_grid(component.start)
+                component.end = snap_to_grid(component.end)
+
+            # text box
+            UI_manager.set_window_resolution((screen.width, screen.height))
+            text_box.set_relative_position((TOOLBAR_WIDTH, display.height)) 
+            text_box.set_dimensions((display.width, screen.height-display.height))
+
+
+        if event.type == MOUSEMOTION:  # get mouse pos each frame
              mouse_pos = np.array(pg.mouse.get_pos())
         if event.type == MOUSEBUTTONDOWN:
             # detect buttons click
             for button in buttons:
                 if button.rect.collidepoint(mouse_pos):
-                    componant_selected = button.button_clicked()
-                    print(componant_selected)
+                    component_selected = button.button_clicked()
 
-    # componant selected --> ready to create if the user clicks
-    if componant_selected:
-        # left click --> create a componant
+        # Pass events to pygame_gui
+        UI_manager.process_events(event)    
+
+    # Update the UIUI_UI_manager
+    UI_manager.update(time_delta)
+
+
+    # component selected --> ready to create if the user clicks
+    if component_selected:
+        # left click --> create a component
         if pg.mouse.get_just_pressed()[0] and display_rect.collidepoint(mouse_pos):
             start_pos = snap_to_grid(mouse_pos)
-            componants.append(Componant(start_pos=start_pos, end_pos=mouse_pos, type=componant_selected, dest_surf=display, color=BLUE))
-            creating_componant = True
-        elif creating_componant:  # update the componant pos that is currently created
-            componants[-1].end = snap_to_grid(mouse_pos)
+            components.append(Component(start_pos=start_pos, end_pos=mouse_pos, type=component_selected, dest_surf=display, color=BLUE))
+            creating_component = True
+        elif creating_component and display_rect.collidepoint(mouse_pos):  # update the component pos that is currently created
+            components[-1].end = snap_to_grid(mouse_pos)
 
-        # release left click --> remove componant if not valid
+        # release left click --> remove component if not valid
         if pg.mouse.get_just_released()[0]:
-            # check if componant inside display and is long enough
-            if creating_componant and (not display_rect.collidepoint(mouse_pos) or np.linalg.norm((start_pos-mouse_pos)) < CELL_SIZE/2):
-                print("not long enough or outside display")
-                componants.pop(-1)  # remove the componant that was being created
-            else:
-                code = generate_tikz_code()
-                console.fill(LIGHT_GRAY)
-                console.blit(code, code.get_rect())
-            creating_componant = False
+            # check if component inside display and is long enough and not at the same place as another
+            if creating_component and not valid_placement():
+                components.pop(-1)  # remove the component that was being created
+            elif display_rect.collidepoint(mouse_pos):
+                display_tikz_code()           
+            creating_component = False
+
+    # edit mode (no componant selected and mouse on display)
+    elif display_rect.collidepoint(mouse_pos):
+        # check if the mouse is over the start pos or end pos of a component to modify it
+        for compopent in components:
+            dist1 = np.linalg.norm(mouse_pos-component.start)  # distance between mouse and start handle
+            dist2 = np.linalg.norm(mouse_pos-component.end)  # distance between mouse and end handle
+            if dist1 <= SELECT_RADIUS:
+                pass
+            elif dist2 <= SELECT_RADIUS:
+                pass
 
 
     # backgtound colors
     display.fill(DARKER_GRAY)
 
     draw_grid()
-    
-    # draw componants
-    for componant in componants:
-        componant.draw()
 
+    # draw components
+    for component in components:
+        component.draw()
+    
+    UI_manager.draw_ui(screen)
 
     # blit surfaces onto the screen
     screen.blit(display, display_rect.topleft)
-    screen.blit(console, (TOOLBAR_WIDTH, display.get_height()))
+    #screen.blit(console, (TOOLBAR_WIDTH, display.get_height()))
     screen.blit(toolbar, (0,0))
 
     # screen update
-    pg.display.update()
-    clock.tick(25)
+    pg.display.flip()
 
 
 pg.quit()
