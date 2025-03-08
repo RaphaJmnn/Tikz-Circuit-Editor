@@ -288,7 +288,6 @@ def display_tikz_code():
     tikz_code = "\\documentclass[tikz,border=10pt]{standalone}\n\n"
     tikz_code += "\\usepackage[european, straightvoltages, RPvoltages, cute inductor]{circuitikz}\n\n"
     tikz_code += "\\begin{document}\n\n    \\begin{tikzpicture}\n"
-    print(len(components))
     for component in components:
         start = ((component.start - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
         end = ((component.end - np.array([TOOLBAR_WIDTH, 0])) // CELL_SIZE - offset) * TIKZ_SCALE_FACTOR
@@ -299,18 +298,20 @@ def display_tikz_code():
     text_box.set_text(tikz_code)
 
 
-def valid_placement():
+def valid_placement(component):
     """
     Test if the component placed (when mouse released) is not too short
     not outside display and not overlapping with another component.
     return True or False
     """    
-    for component in components[:-1]:  # iterate trought all elements exept the last one
-        if (np.array_equal(components[-1].start, component.start) and np.array_equal(components[-1].end, component.end)) or \
-            (np.array_equal(components[-1].start, component.end) and np.array_equal(components[-1].end, component.start)):
+    for other_component in components:  # iterate trought all elements exept the last one
+        if other_component == component: 
+            continue
+        if (np.array_equal(component.start, other_component.start) and np.array_equal(component.end, other_component.end)) or \
+            (np.array_equal(component.start, other_component.end) and np.array_equal(component.end, other_component.start)):
             return False
         
-    if not display_rect.collidepoint(mouse_pos) or np.linalg.norm((start_pos-mouse_pos)) < CELL_SIZE/2:
+    if not display_rect.collidepoint(mouse_pos) or np.linalg.norm((component.start-component.end)) < CELL_SIZE/2:
         return False
     
     return True
@@ -364,6 +365,8 @@ GRID_SIZE = (display.get_width() // CELL_SIZE, display.get_height() // CELL_SIZE
 creating_component = False
 components = []  # list of object (class: component)
 component_selected = None  # str (ex: "wire" or "inductor")
+editing_component = None  # None if no component is currently edited (or object from Component class) 
+editing_start = True  # if False, editing end position of component
 SELECT_RADIUS = 10  # px
 # wires
 WIRE_WIDTH = 5
@@ -434,6 +437,17 @@ while running:
     # Update the UIUI_UI_manager
     UI_manager.update(time_delta)
 
+    # backgtound colors
+    display.fill(DARKER_GRAY)
+
+    draw_grid()
+
+    # draw components
+    for component in components:
+        component.draw()
+    
+    UI_manager.draw_ui(screen)
+
 
     # component selected --> ready to create if the user clicks
     if component_selected:
@@ -448,7 +462,7 @@ while running:
         # release left click --> remove component if not valid
         if pg.mouse.get_just_released()[0]:
             # check if component inside display and is long enough and not at the same place as another
-            if creating_component and not valid_placement():
+            if creating_component and not valid_placement(components[-1]):
                 components.pop(-1)  # remove the component that was being created
             elif display_rect.collidepoint(mouse_pos):
                 display_tikz_code()           
@@ -457,25 +471,35 @@ while running:
     # edit mode (no componant selected and mouse on display)
     elif display_rect.collidepoint(mouse_pos):
         # check if the mouse is over the start pos or end pos of a component to modify it
-        for compopent in components:
+        for component in components:
             dist1 = np.linalg.norm(mouse_pos-component.start)  # distance between mouse and start handle
             dist2 = np.linalg.norm(mouse_pos-component.end)  # distance between mouse and end handle
             if dist1 <= SELECT_RADIUS:
-                pass
+                pg.draw.circle(display, RED, component.start-np.array([TOOLBAR_WIDTH, 0]), SELECT_RADIUS, 1)
+                if pg.mouse.get_just_pressed()[0]:  # if user clicks to edit component
+                    editing_component = component
+                    editing_start = True
             elif dist2 <= SELECT_RADIUS:
-                pass
+                pg.draw.circle(display, RED, component.end-np.array([TOOLBAR_WIDTH, 0]), SELECT_RADIUS, 1)
+                if pg.mouse.get_just_pressed()[0]:  # if user clicks to edit component
+                    editing_component = component
+                    editing_start = False
 
+    if editing_component:
+        if editing_start:
+            editing_component.start = snap_to_grid(mouse_pos)
+        else:
+            editing_component.end = snap_to_grid(mouse_pos)
 
-    # backgtound colors
-    display.fill(DARKER_GRAY)
+          
 
-    draw_grid()
+        if pg.mouse.get_just_released()[0]:  # stop editing component if click released
+            # check if component is still inside display and is long enough and not at the same place as another
+            if not valid_placement(editing_component):
+                components.remove(editing_component)  # remove the component that was being edited
+            display_tikz_code()         
+            editing_component = False
 
-    # draw components
-    for component in components:
-        component.draw()
-    
-    UI_manager.draw_ui(screen)
 
     # blit surfaces onto the screen
     screen.blit(display, display_rect.topleft)
