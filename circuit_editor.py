@@ -364,10 +364,12 @@ GRID_SIZE = (display.get_width() // CELL_SIZE, display.get_height() // CELL_SIZE
 # components
 creating_component = False
 components = []  # list of object (class: component)
-component_selected = None  # str (ex: "wire" or "inductor")
-editing_component = None  # None if no component is currently edited (or object from Component class) 
-editing_start = True  # if False, editing end position of component
-SELECT_RADIUS = 10  # px
+component_button_selected = None  # str (ex: "wire" or "inductor")
+moving_component = None  # None if no component is currently moved (or object from Component class) 
+move_from_start_pos = True  # if False, editing end position of component
+component_selected = None  # None if no component is selected (or object from Component class) Used to edit component (label, suppr etc...)
+MOVE_RADIUS = 10  # px (radius around handles of components to move them)
+SELECT_RADIUS = 30  # px (select from center of component)
 # wires
 WIRE_WIDTH = 5
 # resistors dimensions
@@ -399,6 +401,12 @@ while running:
         if event.type == KEYDOWN:
             if event.key == K_ESCAPE:
                 running = False
+
+            # delete selected component
+            elif event.key == K_DELETE and component_selected: 
+                components.remove(component_selected)
+                component_selected = None
+        
         if event.type == WINDOWRESIZED:  # update surfaces
             # toolbar
             TOOLBAR_WIDTH = TOOLBAR_WIDTH_RATIO * screen.get_width() 
@@ -429,7 +437,7 @@ while running:
             # detect buttons click
             for button in buttons:
                 if button.rect.collidepoint(mouse_pos):
-                    component_selected = button.button_clicked()
+                    component_button_selected = button.button_clicked()
 
         # Pass events to pygame_gui
         UI_manager.process_events(event)    
@@ -450,11 +458,11 @@ while running:
 
 
     # component selected --> ready to create if the user clicks
-    if component_selected:
+    if component_button_selected:
         # left click --> create a component
         if pg.mouse.get_just_pressed()[0] and display_rect.collidepoint(mouse_pos):
             start_pos = snap_to_grid(mouse_pos)
-            components.append(Component(start_pos=start_pos, end_pos=mouse_pos, type=component_selected, dest_surf=display, color=BLUE))
+            components.append(Component(start_pos=start_pos, end_pos=mouse_pos, type=component_button_selected, dest_surf=display, color=BLUE))
             creating_component = True
         elif creating_component and display_rect.collidepoint(mouse_pos):  # update the component pos that is currently created
             components[-1].end = snap_to_grid(mouse_pos)
@@ -472,33 +480,49 @@ while running:
     elif display_rect.collidepoint(mouse_pos):
         # check if the mouse is over the start pos or end pos of a component to modify it
         for component in components:
-            dist1 = np.linalg.norm(mouse_pos-component.start)  # distance between mouse and start handle
-            dist2 = np.linalg.norm(mouse_pos-component.end)  # distance between mouse and end handle
-            if dist1 <= SELECT_RADIUS:
-                pg.draw.circle(display, RED, component.start-np.array([TOOLBAR_WIDTH, 0]), SELECT_RADIUS, 1)
+            dist1 = np.linalg.norm(mouse_pos-component.start)  # distance between mouse and start handle (moving component)
+            dist2 = np.linalg.norm(mouse_pos-component.end)  # distance between mouse and end handle (moving component)
+            dist3 = np.linalg.norm(mouse_pos-(component.end+component.start)/2)  # distance between mouse and center (component selection)
+            if dist1 <= MOVE_RADIUS:
+                pg.draw.circle(display, RED, component.start-np.array([TOOLBAR_WIDTH, 0]), MOVE_RADIUS, 1)
+                if pg.mouse.get_just_pressed()[0]:  # if user clicks to move component
+                    moving_component = component
+                    move_from_start_pos = True
+            elif dist2 <= MOVE_RADIUS:
+                pg.draw.circle(display, RED, component.end-np.array([TOOLBAR_WIDTH, 0]), MOVE_RADIUS, 1)
+                if pg.mouse.get_just_pressed()[0]:  # if user clicks to move component
+                    moving_component = component
+                    move_from_start_pos = False
+            elif dist3 <= SELECT_RADIUS:
+                pg.draw.circle(display, WHITE, (component.end+component.start)/2-np.array([TOOLBAR_WIDTH, 0]), SELECT_RADIUS, 2)
                 if pg.mouse.get_just_pressed()[0]:  # if user clicks to edit component
-                    editing_component = component
-                    editing_start = True
-            elif dist2 <= SELECT_RADIUS:
-                pg.draw.circle(display, RED, component.end-np.array([TOOLBAR_WIDTH, 0]), SELECT_RADIUS, 1)
-                if pg.mouse.get_just_pressed()[0]:  # if user clicks to edit component
-                    editing_component = component
-                    editing_start = False
+                    # deselect selected component
+                    if component_selected == component:
+                        component.color = BLUE
+                        component_selected = None
+                    # select a component when another is already selected
+                    elif component_selected:
+                        component_selected.color = BLUE
+                        component.color = RED
+                        component_selected = component
+                    # select component
+                    else:
+                        component_selected = component
+                        component.color = RED
 
-    if editing_component:
-        if editing_start:
-            editing_component.start = snap_to_grid(mouse_pos)
+    if moving_component:
+        if move_from_start_pos:
+            moving_component.start = snap_to_grid(mouse_pos)
         else:
-            editing_component.end = snap_to_grid(mouse_pos)
+            moving_component.end = snap_to_grid(mouse_pos)
 
-          
-
-        if pg.mouse.get_just_released()[0]:  # stop editing component if click released
+        if pg.mouse.get_just_released()[0]:  # stop moving component if click released
             # check if component is still inside display and is long enough and not at the same place as another
-            if not valid_placement(editing_component):
-                components.remove(editing_component)  # remove the component that was being edited
+            if not valid_placement(moving_component):
+                components.remove(moving_component)  # remove the component that was being moved
             display_tikz_code()         
-            editing_component = False
+            moving_component = False
+
 
 
     # blit surfaces onto the screen
