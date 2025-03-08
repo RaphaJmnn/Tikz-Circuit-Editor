@@ -406,6 +406,8 @@ while running:
             elif event.key == K_DELETE and component_selected: 
                 components.remove(component_selected)
                 component_selected = None
+                display_tikz_code()         
+
         
         if event.type == WINDOWRESIZED:  # update surfaces
             # toolbar
